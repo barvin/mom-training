@@ -12,6 +12,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v2
       - name: Build and test
+        env:
+          RABBIT_PASSWORD: ${{ secrets.RABBIT_PASSWORD }}
         run: |
           chmod +x gradlew
           ./gradlew test
