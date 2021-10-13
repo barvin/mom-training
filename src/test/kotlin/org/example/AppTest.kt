@@ -5,10 +5,10 @@ import com.rabbitmq.client.Connection
 import com.rabbitmq.client.ConnectionFactory
 import org.assertj.core.api.Assertions.assertThat
 import org.awaitility.Awaitility.await
+import org.awaitility.kotlin.atLeast
 import org.awaitility.kotlin.atMost
 import org.awaitility.kotlin.until
 import org.junit.jupiter.api.BeforeAll
-import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.TestInstance
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.Arguments
@@ -25,14 +25,25 @@ class AppTest {
         app.run()
     }
 
-    @Test
-    fun statusIsSentPeriodically() {
-        val listener = QueueListener("status", "StatusConsumer", buildConnection())
-        listener.messages.clear()
-        await() atMost ofSeconds(6) until { listener.messages.size > 0 }
-        await() atMost ofSeconds(6) until { listener.messages.size > 1 }
-        assertThat(listener.messages[0]).isNotEqualTo(listener.messages[1])
-        listener.close()
+    private fun statusIsSentPeriodicallyData(): List<Arguments> {
+        return listOf(
+            Arguments.of("durable_status", true, true),
+            Arguments.of("transient_status", false, true),
+            Arguments.of("durable_status", true, false),
+            Arguments.of("transient_status", false, false)
+        )
+    }
+
+    @ParameterizedTest
+    @MethodSource("statusIsSentPeriodicallyData")
+    fun statusIsSentPeriodically(queueName: String, durable: Boolean, autoAck: Boolean) {
+        QueueListener(queueName, "StatusConsumer", buildConnection(), durable, autoAck)
+            .use { listener ->
+                await() atMost ofSeconds(7) until { listener.messages.size > 0 }
+                await() atLeast ofSeconds(5) atMost ofSeconds(7) until { listener.messages.size > 1 }
+                assertThat(listener.messages[0]).contains("[$queueName]")
+                assertThat(listener.messages[1]).contains("[$queueName]")
+            }
     }
 
     private fun stringTransformData(): List<Arguments> {
@@ -45,20 +56,19 @@ class AppTest {
     @ParameterizedTest
     @MethodSource("stringTransformData")
     fun stringTransformationFlow(input: String, output: String) {
-        val replyToQueueName = "upper_cased"
+        val replyToQueueName = UUID.randomUUID().toString()
         val correlationId = UUID.randomUUID().toString()
-        val listener = QueueListener(replyToQueueName, "UpperCasedConsumer", buildConnection())
-        listener.messages.clear()
-        listener.correlationId = correlationId
+        QueueListener(replyToQueueName, "UpperCasedConsumer", buildConnection()).use { listener ->
+            listener.correlationId = correlationId
 
-        val publisher = QueueRpcPublisher("raw_string", buildConnection())
-        publisher.publish(input, replyToQueueName, correlationId)
+            QueueRpcPublisher("raw_string", buildConnection()).use { publisher ->
 
-        await() atMost ofSeconds(10) until { listener.messages.size > 0 }
-        assertThat(listener.messages[0]).isEqualTo(output)
+                publisher.publish(input, replyToQueueName, correlationId)
 
-        listener.close()
-        publisher.close()
+                await() atMost ofSeconds(5) until { listener.messages.size > 0 }
+                assertThat(listener.messages[0]).isEqualTo(output)
+            }
+        }
     }
 
     private fun buildConnection(): Connection {

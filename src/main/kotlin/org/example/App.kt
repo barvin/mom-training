@@ -6,7 +6,7 @@ import kotlin.concurrent.thread
 
 const val RABBIT_MQ_HOST = "cow.rmq2.cloudamqp.com"
 const val USER_NAME = "zfxtxlyp"
-const val STATUS_DELAY_IN_MILLIS: Long = 5000
+const val STATUS_DELAY_IN_MILLIS: Long = 3000
 const val COMPUTATION_TIME_IN_MILLIS: Long = 3000
 
 class App {
@@ -19,15 +19,19 @@ class App {
     private fun pushStatusPeriodically() {
         buildConnection().use { connection ->
             connection.createChannel().use { channel ->
-                val queueName = "status"
-                channel.queueDeclare(queueName, true, false, false, null)
+                val durableQueueName = "durable_status"
+                val transientQueueName = "transient_status"
+                channel.queueDeclare(durableQueueName, true, false, false, null)
+                channel.queueDeclare(transientQueueName, false, false, false, null)
+                var queueName = durableQueueName
                 while (true) {
                     Thread.sleep(STATUS_DELAY_IN_MILLIS)
-                    val message = "Current time is ${System.currentTimeMillis()}"
+                    val message = "[$queueName] Current time is ${System.currentTimeMillis()}"
                     channel.basicPublish(
                         "", queueName, null, message.toByteArray(StandardCharsets.UTF_8)
                     )
-                    println(" [x] Sent '$message'")
+                    println("[StatusProducer] Sent '$message'")
+                    queueName = if (queueName == durableQueueName) transientQueueName else durableQueueName
                 }
             }
         }
@@ -36,7 +40,7 @@ class App {
     private fun listenAndReplyWithUpperCaseMessage() {
         val channel = buildConnection().createChannel()
         val queueName = "raw_string"
-        val consumerTag = "StringTransformer"
+        val consumerTag = "StringTransformerConsumer"
 
         channel.queueDeclare(queueName, true, false, false, null)
 

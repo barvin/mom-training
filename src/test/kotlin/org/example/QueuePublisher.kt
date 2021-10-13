@@ -3,8 +3,9 @@ package org.example
 import com.rabbitmq.client.AMQP
 import com.rabbitmq.client.Channel
 import com.rabbitmq.client.Connection
+import java.io.Closeable
 
-class QueueRpcPublisher(private val queueName: String, private val connection: Connection) {
+class QueueRpcPublisher(private val queueName: String, private val connection: Connection) : Closeable {
     private val channel: Channel = connection.createChannel()
 
     init {
@@ -20,7 +21,7 @@ class QueueRpcPublisher(private val queueName: String, private val connection: C
         println(" [x] Sent '$message'")
     }
 
-    fun close() {
+    override fun close() {
         channel.close()
         connection.close()
     }

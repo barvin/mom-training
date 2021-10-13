@@ -4,14 +4,23 @@ import com.rabbitmq.client.CancelCallback
 import com.rabbitmq.client.Channel
 import com.rabbitmq.client.Connection
 import com.rabbitmq.client.DeliverCallback
+import java.io.Closeable
 
-class QueueListener(queueName: String, private val consumerTag: String, private val connection: Connection) {
+class QueueListener(
+    queueName: String,
+    private val consumerTag: String,
+    private val connection: Connection,
+    durable: Boolean = true,
+    autoAck: Boolean = true,
+) :
+    Closeable {
+
     val messages = mutableListOf<String>()
     var correlationId: String? = null
     private val channel: Channel = connection.createChannel()
 
     init {
-        channel.queueDeclare(queueName, true, false, false, null)
+        channel.queueDeclare(queueName, durable, false, false, null)
 
         println("[$consumerTag] Waiting for messages...")
 
@@ -26,10 +35,14 @@ class QueueListener(queueName: String, private val consumerTag: String, private 
             println("[$tag] was canceled")
         }
 
-        channel.basicConsume(queueName, true, consumerTag, deliverCallback, cancelCallback)
+        channel.basicConsume(queueName, autoAck, consumerTag, deliverCallback, cancelCallback)
+
+        // ignore all the messages that were waiting in the queue before this consumer has joined
+        Thread.sleep(1000)
+        messages.clear()
     }
 
-    fun close() {
+    override fun close() {
         channel.basicCancel(consumerTag)
         channel.close()
         connection.close()
