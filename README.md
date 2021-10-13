@@ -10,6 +10,7 @@ The task was done in the following way:
    - Request/reply handler transforms the incoming message to upper case and replies to the `reply_to` queue. Artificial sleep for 3 seconds was added to emulate the computation. See `listenAndReplyWithUpperCaseMessage` method.
 
 ## Tests
+- Tests are implemented in the same project, but they are absolutely independent of the application itself, just done in the same repo for convenience. 
 - All tests are implemented in [AppTest.kt](src/test/kotlin/org/example/AppTest.kt)
 - Added classes [QueueListener](src/test/kotlin/org/example/QueueListener.kt) that encapsulates consumer logic and [QueuePublisher](src/test/kotlin/org/example/QueuePublisher.kt) that encapsulates producer logic
 - Tests for eternal producer are done as a parametrized test method, where we check all combinations of durable/transient queue and sending/not sending automatic acknowledgement:
