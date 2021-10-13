@@ -34,34 +34,34 @@ class App {
     }
 
     private fun listenAndReplyWithUpperCaseMessage() {
-        buildConnection().use { connection ->
-            connection.createChannel().use { channel ->
-                val queueName = "raw_string"
-                val consumerTag = "StringTransformer"
+        val channel = buildConnection().createChannel()
+        val queueName = "raw_string"
+        val consumerTag = "StringTransformer"
 
-                channel.queueDeclare(queueName, true, false, false, null)
+        channel.queueDeclare(queueName, true, false, false, null)
 
-                println("[$consumerTag] Waiting for messages...")
-                val deliverCallback = DeliverCallback { tag, delivery ->
-                    val replyProps = AMQP.BasicProperties.Builder()
-                        .correlationId(delivery.properties.correlationId)
-                        .build()
-                    val message = String(delivery.body, charset("UTF-8"))
-                    println("[$tag] Received message: '$message'")
-                    val response = message.uppercase()
-                    Thread.sleep(COMPUTATION_TIME_IN_MILLIS)
-                    channel.basicPublish("", delivery.properties.replyTo, replyProps, response.toByteArray())
-                    channel.basicAck(delivery.envelope.deliveryTag, false)
-                    println("[$tag] Responded with: '$response'")
+        println("[$consumerTag] Waiting for messages...")
+        val deliverCallback = DeliverCallback { tag, delivery ->
+            val replyProps = AMQP.BasicProperties.Builder()
+                .correlationId(delivery.properties.correlationId)
+                .build()
+            val message = String(delivery.body, charset("UTF-8"))
+            println("[$tag] Received message: '$message'")
+            val response = message.uppercase()
+            Thread.sleep(COMPUTATION_TIME_IN_MILLIS)
+            channel.basicPublish("", delivery.properties.replyTo, replyProps, response.toByteArray())
+            println("[$tag] Responded with: '$response'")
 
-                }
-                val cancelCallback = CancelCallback { tag ->
-                    println("[$tag] was canceled")
-                }
-
-                channel.basicConsume(queueName, true, consumerTag, deliverCallback, cancelCallback)
-            }
         }
+        val cancelCallback = CancelCallback { tag ->
+            println("[$tag] was canceled")
+        }
+        val shutdownSignalCallback = ConsumerShutdownSignalCallback { tag, exception ->
+            println("[$tag] was shut down")
+            exception.printStackTrace()
+        }
+
+        channel.basicConsume(queueName, true, consumerTag, deliverCallback, cancelCallback, shutdownSignalCallback)
     }
 
     private fun buildConnection(): Connection {

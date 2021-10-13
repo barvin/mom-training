@@ -7,6 +7,7 @@ import com.rabbitmq.client.DeliverCallback
 
 class QueueListener(queueName: String, private val consumerTag: String, private val connection: Connection) {
     val messages = mutableListOf<String>()
+    var correlationId: String? = null
     private val channel: Channel = connection.createChannel()
 
     init {
@@ -15,9 +16,11 @@ class QueueListener(queueName: String, private val consumerTag: String, private 
         println("[$consumerTag] Waiting for messages...")
 
         val deliverCallback = DeliverCallback { tag, delivery ->
-            val message = String(delivery.body, charset("UTF-8"))
-            println("[$tag] Received message: '$message'")
-            messages.add(message)
+            if (correlationId == null || delivery.properties.correlationId == correlationId) {
+                val message = String(delivery.body, charset("UTF-8"))
+                println("[$tag] Received message: '$message'")
+                messages.add(message)
+            }
         }
         val cancelCallback = CancelCallback { tag ->
             println("[$tag] was canceled")

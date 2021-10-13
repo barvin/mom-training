@@ -10,7 +10,12 @@ import org.awaitility.kotlin.until
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.TestInstance
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.Arguments
+import org.junit.jupiter.params.provider.MethodSource
+import org.junit.jupiter.params.provider.ValueSource
 import java.time.Duration.ofSeconds
+import java.util.*
 
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class AppTest {
@@ -29,6 +34,32 @@ class AppTest {
         await() atMost ofSeconds(6) until { listener.messages.size > 1 }
         assertThat(listener.messages[0]).isNotEqualTo(listener.messages[1])
         listener.close()
+    }
+
+    private fun stringTransformData(): List<Arguments> {
+        return listOf(
+            Arguments.of("weLcoMe tO tHe real woRLD, neo!", "WELCOME TO THE REAL WORLD, NEO!"),
+            Arguments.of("5634 *%^&*#%@)( |><?>\"'''\"d``", "5634 *%^&*#%@)( |><?>\"'''\"D``")
+        )
+    }
+
+    @ParameterizedTest
+    @MethodSource("stringTransformData")
+    fun stringTransformationFlow(input: String, output: String) {
+        val replyToQueueName = "upper_cased"
+        val correlationId = UUID.randomUUID().toString()
+        val listener = QueueListener(replyToQueueName, "UpperCasedConsumer", buildConnection())
+        listener.messages.clear()
+        listener.correlationId = correlationId
+
+        val publisher = QueueRpcPublisher("raw_string", buildConnection())
+        publisher.publish(input, replyToQueueName, correlationId)
+
+        await() atMost ofSeconds(10) until { listener.messages.size > 0 }
+        assertThat(listener.messages[0]).isEqualTo(output)
+
+        listener.close()
+        publisher.close()
     }
 
     private fun buildConnection(): Connection {
